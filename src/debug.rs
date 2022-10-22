@@ -1,7 +1,8 @@
 use bevy::prelude::*;
-use bevy_inspector_egui::{WorldInspectorPlugin, RegisterInspectable};
+use bevy_inspector_egui::{RegisterInspectable, WorldInspectorPlugin};
 
 use crate::player::Player;
+use crate::TILE_SIZE;
 
 pub struct DebugPlugin;
 
