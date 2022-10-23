@@ -1,9 +1,9 @@
 use std::time::Duration;
 
-use bevy::prelude::*;
+use bevy::{prelude::*, sprite::collide_aabb::collide};
 use bevy_inspector_egui::Inspectable;
 
-use crate::TILE_SIZE;
+use crate::{CameraTimer, TILE_SIZE, CameraProperties, tilemap::TileCollider};
 
 // use crate::sprites::Characters;
 
@@ -35,8 +35,9 @@ pub struct PlayerPlugin;
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.add_startup_system(spawn_player)
-            .add_system(player_movement)
-            .add_system(player_animation);
+            .add_system(player_movement.label("player_movement"))
+            .add_system(player_animation)
+            .add_system(camera_follow.after("player_movement"));
     }
 }
 
@@ -82,6 +83,7 @@ fn player_movement(
     time: Res<Time>,
     keyboard_input: Res<Input<KeyCode>>,
     mut query: Query<(&mut Player, &mut AnimationTimer, &mut Transform)>,
+    wall_query: Query<&GlobalTransform, (With<TileCollider>, Without<Player>)>
 ) {
     let (mut player, mut timer, mut transform) = query.single_mut();
     let mut movement = Vec3::ZERO;
@@ -96,8 +98,17 @@ fn player_movement(
             player.run_speed
         } else {
             player.speed
-        } * TILE_SIZE * time.delta_seconds();
+        } * TILE_SIZE
+            * time.delta_seconds();
     }
+    
+    if !wall_collision_check(transform.translation + Vec3::new(movement.x, 0., 0.), &wall_query) {
+        movement.x = 0.;
+    }
+    if !wall_collision_check(transform.translation + Vec3::new(0., movement.y, 0.), &wall_query) {
+        movement.y = 0.;
+    }
+
     player.motion = if movement.x > 0. {
         MoveStatus::Moving(Direction::Right)
     } else if movement.x < 0. {
@@ -109,15 +120,58 @@ fn player_movement(
     } else {
         MoveStatus::Stopped
     };
-    player.running = keyboard_input.pressed(KeyCode::LShift);
+    player.running = player.motion != MoveStatus::Stopped && keyboard_input.pressed(KeyCode::LShift);
     if player.running {
-        timer.set_duration(Duration::from_millis((TIMER_DURATION * player.speed / player.run_speed * 1000.) as u64));
+        timer.set_duration(Duration::from_millis(
+            (TIMER_DURATION * player.speed / player.run_speed * 1000.) as u64,
+        ));
     } else {
         timer.set_duration(Duration::from_millis((TIMER_DURATION * 1000.) as u64));
     }
     transform.translation += movement;
 }
 
+fn wall_collision_check(
+    target_player_pos: Vec3,
+    wall_query: &Query<&GlobalTransform, (With<TileCollider>, Without<Player>)>,
+) -> bool {
+    for wall_transform in wall_query.iter() {
+        let collision = collide(
+            target_player_pos,
+            Vec2::splat(TILE_SIZE * 0.8),
+            wall_transform.translation(),
+            Vec2::splat(TILE_SIZE),
+        );
+        if collision.is_some() {
+            return false;
+        }
+    }
+    true
+}
+
+fn camera_follow(
+    time: Res<Time>,
+    player_query: Query<&Transform, With<Player>>,
+    mut camera_query: Query<(&mut Transform, &mut CameraTimer, &CameraProperties), (Without<Player>, With<Camera>)>,
+) {
+    let player_transform = player_query.single();
+    for (mut camera_transform, mut timer, properties) in &mut camera_query {
+        timer.tick(time.delta());
+        if properties.follow_distance == 0. {
+            camera_transform.translation.x = player_transform.translation.x;
+            camera_transform.translation.y = player_transform.translation.y;
+        } else {
+        if timer.just_finished() {
+            let vel = Vec3::new(
+                player_transform.translation.x - camera_transform.translation.x,
+                player_transform.translation.y - camera_transform.translation.y,
+                0.,
+            );
+            camera_transform.translation += vel / properties.follow_distance;
+        }
+        }
+    }
+}
 #[derive(Component, Deref, DerefMut)]
 struct AnimationTimer(Timer);
 

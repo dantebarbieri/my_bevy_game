@@ -8,6 +8,7 @@ mod player;
 // mod sprites;
 mod tilemap;
 
+use bevy_inspector_egui::Inspectable;
 use debug::DebugPlugin;
 use player::PlayerPlugin;
 // use sprites::SpritePlugin;
@@ -28,8 +29,17 @@ fn main() {
         .run();
 }
 
+#[derive(Component, Deref, DerefMut)]
+struct CameraTimer(Timer);
+
+#[derive(Component, Inspectable)]
+struct CameraProperties{
+    follow_distance: f32
+}
+
 fn spawn_camera(mut commands: Commands) {
-    commands.spawn_bundle(Camera2dBundle {
+    commands
+    .spawn_bundle(Camera2dBundle {
         projection: OrthographicProjection {
             left: -1. * RESOLUTION,
             right: 1. * RESOLUTION,
@@ -39,5 +49,9 @@ fn spawn_camera(mut commands: Commands) {
             ..default()
         },
         ..default()
-    });
+    })
+    .insert(CameraProperties {
+        follow_distance: 30.
+    })
+    .insert(CameraTimer(Timer::from_seconds(1./400., true)));
 }
