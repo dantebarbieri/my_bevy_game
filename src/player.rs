@@ -138,7 +138,7 @@ fn wall_collision_check(
     for wall_transform in wall_query.iter() {
         let collision = collide(
             target_player_pos,
-            Vec2::splat(TILE_SIZE * 0.8),
+            Vec2::splat(TILE_SIZE * 0.75),
             wall_transform.translation(),
             Vec2::splat(TILE_SIZE),
         );
